@@ -1,125 +1,76 @@
-/* global document, Office, Word */
+/* global Office, Word */
 
-let pollTimer = null;
+Office.onReady(() => {
+  const btn = document.getElementById("runBtn");
+  const status = document.getElementById("status");
 
-Office.onReady((info) => {
-  if (info.host === Office.HostType.Word) {
-    document.getElementById("sideload-msg").style.display = "none";
-    document.getElementById("app-body").style.display = "flex";
+  const setStatus = (msg) => { status.textContent = msg; };
 
-    const btn = document.getElementById("btnFormatSelection");
-    const status = document.getElementById("format-status");
+  btn.addEventListener("click", async () => {
+    try {
+      setStatus("整形中…");
 
-    // クリック/Enter/Space で実行（ボタンっぽく）
-    btn.addEventListener("click", () => onPressFormat());
-    btn.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" || e.key === " ") {
-        e.preventDefault();
-        onPressFormat();
-      }
-    });
-
-    // 選択がある時だけ有効化するため、定期的に選択を監視
-    startSelectionPolling();
-
-    // 初期表示
-    setEnabled(false, "本文で文字を選択すると、ボタンが有効になります。");
-
-    function setEnabled(enabled, message) {
-      btn.setAttribute("aria-disabled", enabled ? "false" : "true");
-      btn.style.pointerEvents = enabled ? "auto" : "none";
-      if (status) status.textContent = message || "";
-    }
-
-    async function startSelectionPolling() {
-      if (pollTimer) clearInterval(pollTimer);
-
-      pollTimer = setInterval(async () => {
-        try {
-          const hasSelection = await selectionHasText();
-          if (hasSelection) {
-            setEnabled(true, "準備OK：青いボタンを押すと整形します。");
-          } else {
-            setEnabled(false, "本文で整形したい文字を選択してください。");
-          }
-        } catch {
-          // たまに選択取得に失敗しても無視（UIが壊れない方が大事）
-        }
-      }, 600);
-    }
-
-    async function selectionHasText() {
-      return Word.run(async (context) => {
-        const r = context.document.getSelection();
-        r.load("text");
+      await Word.run(async (context) => {
+        const range = context.document.getSelection();
+        range.load("text");
         await context.sync();
-        return (r.text || "").trim().length > 0;
+
+        const original = range.text || "";
+        if (!original.trim()) {
+          setStatus("本文で文字を選択してください。");
+          return;
+        }
+
+        const formatted = formatText(original);
+
+        if (formatted === original) {
+          setStatus("変更はありませんでした。");
+          return;
+        }
+
+        range.insertText(formatted, Word.InsertLocation.replace);
+        await context.sync();
+
+        setStatus("整形が完了しました。");
       });
+
+    } catch (e) {
+      console.error(e);
+      setStatus("エラーが発生しました。選択範囲があるか確認してください。");
     }
-
-    async function onPressFormat() {
-      // ボタンが無効状態なら何もしない
-      if (btn.getAttribute("aria-disabled") === "true") return;
-
-      setEnabled(true, "整形中…");
-
-      try {
-        await Word.run(async (context) => {
-          const range = context.document.getSelection();
-          range.load("text");
-          await context.sync();
-
-          const original = range.text || "";
-          if (!original.trim()) {
-            setEnabled(false, "本文で整形したい文字を選択してください。");
-            return;
-          }
-
-          const formatted = formatJapaneseText(original);
-          range.insertText(formatted, Word.InsertLocation.replace);
-
-          await context.sync();
-        });
-
-        setEnabled(true, "整形が完了しました。");
-      } catch (e) {
-        console.error(e);
-        setEnabled(true, "エラーが発生しました。もう一度お試しください。");
-        alert("整形に失敗しました: " + (e?.message ?? e));
-      }
-    }
-  }
+  });
 });
 
-function formatJapaneseText(input) {
-  let s = toHalfwidthAsciiAndSpace(input);
-  s = s.replace(/\uFF70/g, "ー"); // 半角長音 → 全角
-  s = halfwidthKatakanaToFullwidth(s);
+/**
+ * 体裁整形ルール
+ * - 全角英数字 → 半角
+ * - 半角カナ → 全角カナ（濁点/半濁点も対応）
+ * - ｰ 等 → ー
+ */
+function formatText(input) {
+  let s = input;
+
+  // 1) 全角英数字 -> 半角
+  s = s.replace(/[！-～]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0));
+  s = s.replace(/　/g, " "); // 全角スペース -> 半角スペース（必要なら）
+
+  // 2) 半角カナ -> 全角カナ（濁点/半濁点込み）
+  s = hankakuKanaToZenkaku(s);
+
+  // 3) 長音/ハイフンっぽいものを統一
+  // ｰ(FF70)､ －(FF0D)､ ﹣(FE63)､ ｰ etc -> ー
+  s = s.replace(/[\uFF70\uFF0D\uFE63\u2010\u2011\u2012\u2013\u2212]/g, "ー");
+
   return s;
 }
 
-function toHalfwidthAsciiAndSpace(str) {
-  let out = "";
-  for (let i = 0; i < str.length; i++) {
-    const code = str.charCodeAt(i);
-
-    if (code === 0x3000) {
-      out += " ";
-      continue;
-    }
-
-    if (code >= 0xff01 && code <= 0xff5e) {
-      out += String.fromCharCode(code - 0xfee0);
-      continue;
-    }
-
-    out += str[i];
-  }
-  return out;
-}
-
-function halfwidthKatakanaToFullwidth(str) {
-  const baseMap = {
+/**
+ * 半角カナ -> 全角カナ
+ * ざっくり実務向け：主要範囲と濁点/半濁点を処理
+ */
+function hankakuKanaToZenkaku(str) {
+  // 半角カナ -> 全角カナ 基本マップ
+  const map = {
     "ｱ":"ア","ｲ":"イ","ｳ":"ウ","ｴ":"エ","ｵ":"オ",
     "ｶ":"カ","ｷ":"キ","ｸ":"ク","ｹ":"ケ","ｺ":"コ",
     "ｻ":"サ","ｼ":"シ","ｽ":"ス","ｾ":"セ","ｿ":"ソ",
@@ -131,10 +82,12 @@ function halfwidthKatakanaToFullwidth(str) {
     "ﾗ":"ラ","ﾘ":"リ","ﾙ":"ル","ﾚ":"レ","ﾛ":"ロ",
     "ﾜ":"ワ","ｦ":"ヲ","ﾝ":"ン",
     "ｧ":"ァ","ｨ":"ィ","ｩ":"ゥ","ｪ":"ェ","ｫ":"ォ",
-    "ｯ":"ッ","ｬ":"ャ","ｭ":"ュ","ｮ":"ョ",
-    "｡":"。","､":"、","ｰ":"ー","｢":"「","｣":"」","･":"・"
+    "ｬ":"ャ","ｭ":"ュ","ｮ":"ョ","ｯ":"ッ",
+    "｡":"。","､":"、","･":"・","｢":"「","｣":"」",
+    "ｰ":"ー"
   };
 
+  // 濁点/半濁点
   const dakutenMap = {
     "カ":"ガ","キ":"ギ","ク":"グ","ケ":"ゲ","コ":"ゴ",
     "サ":"ザ","シ":"ジ","ス":"ズ","セ":"ゼ","ソ":"ゾ",
@@ -142,33 +95,21 @@ function halfwidthKatakanaToFullwidth(str) {
     "ハ":"バ","ヒ":"ビ","フ":"ブ","ヘ":"ベ","ホ":"ボ",
     "ウ":"ヴ"
   };
-
   const handakutenMap = {
     "ハ":"パ","ヒ":"ピ","フ":"プ","ヘ":"ペ","ホ":"ポ"
   };
 
-  let out = "";
-  for (let i = 0; i < str.length; i++) {
-    const ch = str[i];
-    const next = str[i + 1];
+  // まず基本置換
+  let out = str.replace(/[｡-ﾟ]/g, (ch) => map[ch] || ch);
 
-    if (ch === "ﾞ" || ch === "ﾟ") continue;
+  // ﾞ(FF9E) と ﾟ(FF9F) を前文字に合成
+  // ※基本置換後にも残る可能性があるので、合成を後処理
+  out = out
+    .replace(/([カ-トハヒフヘホウ])ﾞ/g, (m, p1) => dakutenMap[p1] || (p1 + "゛"))
+    .replace(/([ハヒフヘホ])ﾟ/g, (m, p1) => handakutenMap[p1] || (p1 + "゜"));
 
-    if (baseMap[ch]) {
-      let full = baseMap[ch];
+  // 置換できずに残った半角濁点/半濁点は削除（必要なら）
+  out = out.replace(/[ﾞﾟ]/g, "");
 
-      if (next === "ﾞ" && dakutenMap[full]) {
-        full = dakutenMap[full];
-        i++;
-      } else if (next === "ﾟ" && handakutenMap[full]) {
-        full = handakutenMap[full];
-        i++;
-      }
-
-      out += full;
-    } else {
-      out += ch;
-    }
-  }
   return out;
 }
