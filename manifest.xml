@@ -6,8 +6,6 @@
            xsi:type="TaskPaneApp">
 
   <Id>a9647cf7-cb6d-4e68-87bb-9f428ad5ffee</Id>
-
-  <!-- ★ キャッシュ対策で必ず上げる（ロゴ差し替え時は特に重要） -->
   <Version>1.0.0.2</Version>
 
   <ProviderName>Tokyo JC</ProviderName>
@@ -16,14 +14,11 @@
   <DisplayName DefaultValue="文書体裁 自動整形"/>
   <Description DefaultValue="選択範囲の表記（全角/半角、半角カナ等）を自動整形します。"/>
 
-  <!-- リボンや一覧表示で使われるアイコン（基本） -->
-  <IconUrl DefaultValue="https://localhost:3000/assets/icon-32-v2.png"/>
-  <HighResolutionIconUrl DefaultValue="https://localhost:3000/assets/icon-64.png"/>
-
-  <SupportUrl DefaultValue="https://localhost:3000/"/>
+  <HighResolutionIconUrl DefaultValue="https://gochi0906-hub.github.io/word-auto-format/assets/icon-64.png"/>
+  <SupportUrl DefaultValue="https://gochi0906-hub.github.io/word-auto-format/"/>
 
   <AppDomains>
-    <AppDomain>https://localhost:3000</AppDomain>
+    <AppDomain>https://gochi0906-hub.github.io</AppDomain>
   </AppDomains>
 
   <Hosts>
@@ -31,7 +26,7 @@
   </Hosts>
 
   <DefaultSettings>
-    <SourceLocation DefaultValue="https://localhost:3000/taskpane.html"/>
+    <SourceLocation DefaultValue="https://gochi0906-hub.github.io/word-auto-format/taskpane.html"/>
   </DefaultSettings>
 
   <Permissions>ReadWriteDocument</Permissions>
@@ -52,6 +47,7 @@
 
           <ExtensionPoint xsi:type="PrimaryCommandSurface">
             <OfficeTab id="TabHome">
+
               <Group id="CommandsGroup">
                 <Label resid="CommandsGroup.Label"/>
 
@@ -79,7 +75,9 @@
                     <SourceLocation resid="Taskpane.Url"/>
                   </Action>
                 </Control>
+
               </Group>
+
             </OfficeTab>
           </ExtensionPoint>
 
@@ -89,16 +87,15 @@
 
     <Resources>
       <bt:Images>
-        <bt:Image id="Icon.16x16" DefaultValue="https://localhost:3000/assets/icon-16.png"/>
-        <!-- ★ リボンの32pxはここが効きます -->
-        <bt:Image id="Icon.32x32" DefaultValue="https://localhost:3000/assets/icon-32-v2.png"/>
-        <bt:Image id="Icon.80x80" DefaultValue="https://localhost:3000/assets/icon-80.png"/>
+        <bt:Image id="Icon.16x16" DefaultValue="https://gochi0906-hub.github.io/word-auto-format/assets/icon-16.png"/>
+        <bt:Image id="Icon.32x32" DefaultValue="https://gochi0906-hub.github.io/word-auto-format/assets/icon-32.png"/>
+        <bt:Image id="Icon.80x80" DefaultValue="https://gochi0906-hub.github.io/word-auto-format/assets/icon-80.png"/>
       </bt:Images>
 
       <bt:Urls>
-        <bt:Url id="GetStarted.LearnMoreUrl" DefaultValue="https://localhost:3000/"/>
-        <bt:Url id="Commands.Url" DefaultValue="https://localhost:3000/commands.html"/>
-        <bt:Url id="Taskpane.Url" DefaultValue="https://localhost:3000/taskpane.html"/>
+        <bt:Url id="GetStarted.LearnMoreUrl" DefaultValue="https://gochi0906-hub.github.io/word-auto-format/"/>
+        <bt:Url id="Commands.Url" DefaultValue="https://gochi0906-hub.github.io/word-auto-format/commands.html"/>
+        <bt:Url id="Taskpane.Url" DefaultValue="https://gochi0906-hub.github.io/word-auto-format/taskpane.html"/>
       </bt:Urls>
 
       <bt:ShortStrings>
